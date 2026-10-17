@@ -1,18 +1,23 @@
 name: ci
+run-name: ci ${{ github.event.inputs.ref || 'weekly' }}
 
 # The continuous integration of Syg, whose source is private
 # (github.com/vishisht16/syg-core): its jobs, hack/ci.sh there, on GitHub's
-# runners. Started by hand for a branch, tag or commit, and weekly.
+# runners. Started by watch.yml for each commit it finds untested, by hand for
+# a branch, tag or commit, and weekly. Each run sets the commit status
+# "syg-ci" on the commit it tests, and the default branch's documentation site
+# is deployed as the preview, on this repository's Pages.
 #
 # Guardrails, so that no source reaches this repository or its logs:
 #   - Never started by a pull request: a fork's workflow never sees the
 #     secret, and no outside change runs here.
-#   - The source is checked out with CORE_READ_TOKEN (read-only, one
-#     repository), which only that step is given, and quietly: git's
-#     detached-HEAD message would print the commit's subject.
+#   - The source is checked out with CORE_READ_TOKEN (one repository: its
+#     contents read-only, its commit statuses read and write), which only the
+#     steps that need it are given, and quietly: git's detached-HEAD message
+#     would print the commit's subject.
 #   - A job's output goes to a file, never to the log. The file is encrypted
-#     with age to a key kept with the source, and it is the only upload; the
-#     log says which job passed.
+#     with age to a key kept with the source, and it is the only upload but the
+#     documentation site, which is published; the log says which job passed.
 #   - No caches; third-party actions pinned by commit; Syg sends no usage
 #     statistics from here.
 on:
@@ -41,25 +46,28 @@ env:
   SYG_TELEMETRY: "off"
 
 jobs:
-  # The commit every job tests, so that a push during the run changes nothing.
+  # The commit every job tests, whether it is the default branch's head, and
+  # whether the preview deploys; the commit status set to pending.
   resolve:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pages: read
     outputs:
-      sha: ${{ steps.sha.outputs.sha }}
+      sha: ${{ steps.resolve.outputs.sha }}
+      default: ${{ steps.resolve.outputs.default }}
+      pages: ${{ steps.resolve.outputs.pages }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - id: sha
+      - id: resolve
         env:
           CORE_READ_TOKEN: ${{ secrets.CORE_READ_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           REF: ${{ github.event.inputs.ref || 'claude/syg-compiler' }}
-        run: |
-          bash checkout.sh "$REF"
-          sha=$(git -C core rev-parse HEAD)
-          echo "testing $sha"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        run: bash resolve.sh "$REF"
 
   # Unit, golden and module tests, on every OS Syg ships for.
   test:
@@ -193,3 +201,71 @@ jobs:
           name: log-scan
           path: logs/*.age
           retention-days: 14
+
+  # The documentation site, built as published and link-checked; the default
+  # branch's is packaged for the preview.
+  docs:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: check out the source, with its history and tags (the site shows the version)
+        env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_READ_TOKEN }}
+          REF: ${{ needs.resolve.outputs.sha }}
+        run: bash checkout.sh "$REF" all
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: core/go.mod
+          cache: false
+      - name: docs
+        run: bash run.sh docs bash hack/ci.sh docs "$GITHUB_WORKSPACE/site"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('logs/*.age') != '' }}
+        with:
+          name: log-docs
+          path: logs/*.age
+          retention-days: 14
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        if: needs.resolve.outputs.default == 'true' && needs.resolve.outputs.pages == 'true'
+        with:
+          path: site
+
+  # The preview: the default branch's site, on this repository's Pages, once
+  # Pages deploys from GitHub Actions (Settings > Pages).
+  pages:
+    needs: [resolve, docs]
+    if: needs.resolve.outputs.default == 'true' && needs.resolve.outputs.pages == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # The commit status "syg-ci" in syg-core: what its pull requests show.
+  report:
+    needs: [resolve, test, lint, kind, scan, docs]
+    if: ${{ always() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - env:
+          CORE_READ_TOKEN: ${{ secrets.CORE_READ_TOKEN }}
+          SHA: ${{ needs.resolve.outputs.sha }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: bash status.sh "$SHA" "$NEEDS"

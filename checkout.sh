@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# checkout.sh REF: syg-core at REF (a branch, tag or commit) into core/.
-# Quietly: git's detached-HEAD message would print the commit's subject. The
-# token is used for this fetch alone, and not kept.
+# checkout.sh REF [all]: syg-core at REF (a branch, tag or commit) into core/:
+# the commit alone, or with "all" its history and tags too (for git describe).
+# Quietly: git's detached-HEAD message would print the commit's subject.
 set -euo pipefail
-ref=${1:?usage: checkout.sh REF}
-: "${CORE_READ_TOKEN:?the CORE_READ_TOKEN secret is not set}"
-basic=$(printf 'x-access-token:%s' "$CORE_READ_TOKEN" | base64 | tr -d '\n')
-echo "::add-mask::$basic"
+ref=${1:?usage: checkout.sh REF [all]}
+. "$(dirname "$0")/lib.sh"
+fetch=(--depth 1 --no-tags)
+if [ "${2:-}" = all ]; then fetch=(--tags); fi
 git -c init.defaultBranch=main init -q core
-git -C core -c "http.extraheader=AUTHORIZATION: basic $basic" \
-  fetch -q --depth 1 --no-tags https://github.com/Vishisht16/Syg-Core.git "$ref"
+core_git -C core fetch -q "${fetch[@]}" "$CORE_URL" "$ref"
 git -C core -c advice.detachedHead=false checkout -q FETCH_HEAD
