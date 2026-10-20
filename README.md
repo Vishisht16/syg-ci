@@ -9,7 +9,9 @@ latest build is the preview on this repository's Pages.
 Every quarter of an hour, `watch` starts the CI for each commit it has not
 tested: the source's default branch, and its Dependabot pull requests. The CI
 also runs when started by hand, and weekly, and reports each commit's result
-to the source as the commit status `syg-ci`.
+to the source as the commit status `syg-ci`. Started by hand, it can run its
+Linux jobs on another Ubuntu image than `ubuntu-latest` (`ubuntu-24.04` or
+`ubuntu-26.04`); that run reports as `syg-ci (IMAGE)`, and deploys nothing.
 
 A job's output never reaches the log. It is encrypted with
 [age](https://age-encryption.org) to a key kept with the source, and uploaded

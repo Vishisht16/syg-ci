@@ -1,12 +1,14 @@
 name: ci
-run-name: ci ${{ github.event.inputs.ref || 'weekly' }}
+run-name: ci ${{ github.event.inputs.ref || 'weekly' }}${{ inputs.ubuntu && inputs.ubuntu != 'ubuntu-latest' && format(' on {0}', inputs.ubuntu) || '' }}
 
 # The continuous integration of Syg, whose source is private
 # (github.com/vishisht16/syg-core): its jobs, hack/ci.sh there, on GitHub's
 # runners. Started by watch.yml for each commit it finds untested, by hand for
 # a branch, tag or commit, and weekly. Each run sets the commit status
 # "syg-ci" on the commit it tests, and the default branch's documentation site
-# is deployed as the preview, on this repository's Pages.
+# is deployed as the preview, on this repository's Pages. Started by hand on
+# another Ubuntu image than ubuntu-latest (`ubuntu`), the Linux jobs run there:
+# the commit status is then "syg-ci (IMAGE)", and nothing is deployed.
 #
 # Guardrails, so that no source reaches this repository or its logs:
 #   - Never started by a pull request: a fork's workflow never sees the
@@ -27,6 +29,11 @@ on:
         description: the branch, tag or commit of syg-core to test
         required: true
         default: claude/syg-compiler
+      ubuntu:
+        description: the Ubuntu image the Linux jobs run on
+        type: choice
+        options: [ubuntu-latest, ubuntu-24.04, ubuntu-26.04]
+        default: ubuntu-latest
   schedule:
     # Weekly: a newly published advisory can make code that has not changed
     # vulnerable, and the runners change under it.
@@ -35,15 +42,17 @@ on:
 permissions:
   contents: read
 
-# A newer run for the same ref replaces an older one.
+# A newer run for the same ref, on the same image, replaces an older one.
 concurrency:
-  group: ci-${{ github.event.inputs.ref || 'weekly' }}
+  group: ci-${{ github.event.inputs.ref || 'weekly' }}-${{ inputs.ubuntu || 'ubuntu-latest' }}
   cancel-in-progress: true
 
 env:
   # The public half of syg-core's hack/ci-logs.key.
   LOG_RECIPIENT: age1augl97syl0e95ap905j9pcxfh35fm5g0eldxjyt452f0aaywnpqsvmm3jd
   SYG_TELEMETRY: "off"
+  # The commit status this run sets (status.sh).
+  STATUS_CONTEXT: ${{ (inputs.ubuntu || 'ubuntu-latest') == 'ubuntu-latest' && 'syg-ci' || format('syg-ci ({0})', inputs.ubuntu) }}
 
 jobs:
   # The commit every job tests, whether it is the default branch's head, and
@@ -75,7 +84,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ["${{ inputs.ubuntu || 'ubuntu-latest' }}", macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     defaults:
@@ -106,7 +115,7 @@ jobs:
   # Formatting, the rule triples, coverage, and a short fuzz of each target.
   lint:
     needs: resolve
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.ubuntu || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -135,7 +144,7 @@ jobs:
   kind:
     name: kind (${{ matrix.k8s }})
     needs: resolve
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.ubuntu || 'ubuntu-latest' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -178,7 +187,7 @@ jobs:
   # Known vulnerabilities (govulncheck) and static analysis (staticcheck).
   scan:
     needs: resolve
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.ubuntu || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -206,7 +215,7 @@ jobs:
   # branch's is packaged for the preview.
   docs:
     needs: resolve
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.ubuntu || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -230,7 +239,7 @@ jobs:
           path: logs/*.age
           retention-days: 14
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        if: needs.resolve.outputs.default == 'true' && needs.resolve.outputs.pages == 'true'
+        if: needs.resolve.outputs.default == 'true' && needs.resolve.outputs.pages == 'true' && (inputs.ubuntu || 'ubuntu-latest') == 'ubuntu-latest'
         with:
           path: site
 
@@ -238,7 +247,7 @@ jobs:
   # Pages deploys from GitHub Actions (Settings > Pages).
   pages:
     needs: [resolve, docs]
-    if: needs.resolve.outputs.default == 'true' && needs.resolve.outputs.pages == 'true'
+    if: needs.resolve.outputs.default == 'true' && needs.resolve.outputs.pages == 'true' && (inputs.ubuntu || 'ubuntu-latest') == 'ubuntu-latest'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
