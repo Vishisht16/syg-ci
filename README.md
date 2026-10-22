@@ -13,6 +13,12 @@ to the source as the commit status `syg-ci`. Started by hand, it can run its
 Linux jobs on another Ubuntu image than `ubuntu-latest` (`ubuntu-24.04` or
 `ubuntu-26.04`); that run reports as `syg-ci (IMAGE)`, and deploys nothing.
 
+Started by hand, `chaos` runs the source's probes of what differs between
+Linux, macOS and Windows (links and junctions, case, reserved names, long
+paths, line endings, files in use, the console, the language server's paths)
+on `ubuntu-latest`, `macos-latest`, `macos-15-intel`, `windows-latest` and
+`windows-11-arm`, for a person to read; it sets no commit status.
+
 A job's output never reaches the log. It is encrypted with
 [age](https://age-encryption.org) to a key kept with the source, and uploaded
 as an artifact of the run; the log says only whether the job passed.

@@ -104,7 +104,9 @@ jobs:
           go-version-file: core/go.mod
           cache: false
       - name: test
-        run: bash run.sh "test-${{ matrix.os }}" bash hack/ci.sh test
+        env:
+          NAME: test-${{ matrix.os }}
+        run: bash run.sh "$NAME" bash hack/ci.sh test
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() && hashFiles('logs/*.age') != '' }}
         with:

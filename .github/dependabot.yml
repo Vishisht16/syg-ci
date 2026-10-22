@@ -1,10 +1,13 @@
 version: 2
 updates:
-  # The actions, pinned by commit: one pull request a month.
+  # The actions, pinned by commit: one pull request a month, each version once
+  # it has been out for two weeks.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 14
     groups:
       actions:
         patterns: ["*"]
