@@ -1,24 +1,14 @@
 # syg-ci
 
 The continuous integration of [Syg](https://github.com/vishisht16/syg), whose
-source is private, on GitHub's runners: its tests on Linux, macOS and Windows,
-the lint and fuzz job, the end-to-end suites on kind clusters (Kubernetes
-1.30, 1.32 and 1.33), a vulnerability scan, and the documentation site, whose
-latest build is the preview on this repository's Pages.
+source is private, from 2026-10-17 to 2026-10-24. It now runs in Syg's own
+repository: its `ci`, `watch` and `chaos` workflows, which report to the
+source as the commit status `ci`.
 
-Every quarter of an hour, `watch` starts the CI for each commit it has not
-tested: the source's default branch, and its Dependabot pull requests. The CI
-also runs when started by hand, and weekly, and reports each commit's result
-to the source as the commit status `syg-ci`. Started by hand, it can run its
-Linux jobs on another Ubuntu image than `ubuntu-latest` (`ubuntu-24.04` or
-`ubuntu-26.04`); that run reports as `syg-ci (IMAGE)`, and deploys nothing.
+Nothing here runs on a schedule any more. `ci` and `chaos` can still be
+started by hand until this repository is archived, and their runs' history
+stays here.
 
-Started by hand, `chaos` runs the source's probes of what differs between
-Linux, macOS and Windows (links and junctions, case, reserved names, long
-paths, line endings, files in use, the console, the language server's paths)
-on `ubuntu-latest`, `macos-latest`, `macos-15-intel`, `windows-latest` and
-`windows-11-arm`, for a person to read; it sets no commit status.
-
-A job's output never reaches the log. It is encrypted with
+While it ran here, a job's output never reached the log: it was encrypted with
 [age](https://age-encryption.org) to a key kept with the source, and uploaded
-as an artifact of the run; the log says only whether the job passed.
+as an artifact of the run; the log said only whether the job passed.

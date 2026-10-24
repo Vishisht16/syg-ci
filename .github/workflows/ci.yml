@@ -2,9 +2,10 @@ name: ci
 run-name: ci ${{ github.event.inputs.ref || 'weekly' }}${{ inputs.ubuntu && inputs.ubuntu != 'ubuntu-latest' && format(' on {0}', inputs.ubuntu) || '' }}
 
 # The continuous integration of Syg, whose source is private
-# (github.com/vishisht16/syg-core): its jobs, hack/ci.sh there, on GitHub's
-# runners. Started by watch.yml for each commit it finds untested, by hand for
-# a branch, tag or commit, and weekly. Each run sets the commit status
+# (github.com/vishisht16/syg-core), until 2026-10-24: it now runs in
+# vishisht16/syg, and here only when started by hand, for a branch, tag or
+# commit, until this repository is archived. Its jobs are hack/ci.sh there,
+# on GitHub's runners. Each run sets the commit status
 # "syg-ci" on the commit it tests, and the default branch's documentation site
 # is deployed as the preview, on this repository's Pages. Started by hand on
 # another Ubuntu image than ubuntu-latest (`ubuntu`), the Linux jobs run there:
@@ -34,10 +35,6 @@ on:
         type: choice
         options: [ubuntu-latest, ubuntu-24.04, ubuntu-26.04]
         default: ubuntu-latest
-  schedule:
-    # Weekly: a newly published advisory can make code that has not changed
-    # vulnerable, and the runners change under it.
-    - cron: "17 3 * * 1"
 
 permissions:
   contents: read
